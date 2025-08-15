@@ -6,7 +6,8 @@ import edge_tts
 import pygame
 import os
 
-VOICE = "en-US-JennyNeural"  # Try "en-US-JennyNeural" for female
+VOICE = "en-US-JennyNeural"
+# Try "en-US-JennyNeural" for female
 #en-US-JennyNeural
 # Initialize pygame mixer
 pygame.mixer.init()

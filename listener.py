@@ -14,7 +14,7 @@ def listen (promt="listening...."):
     except sr.WaitTimeoutError:
         print("⏳ Listening timed out. No speech detected.")
         return ""
-    except sr.UnknownValueError:
+    except sr.UnknownValueError: 
         print("❌ Could not understand audio.")
         return ""
     except sr.RequestError as e:
