@@ -106,3 +106,22 @@ def recall_long_term_memory(query, top_k=3):
     embedding = embedder.encode([query])[0].tolist()
     results = collection.query(query_embeddings=[embedding], n_results=top_k)
     return results["documents"]
+
+
+#----------- should trigger screenshot mechanism or not ------------
+def should_trigger_screen_mechanism( text: str) ->bool:
+    text_lower = text.lower()
+
+    screentshot_keywords = [
+        "screenshot", "capture screen", "snap my screen", 
+        "take my screen", "print screen", "need help with screen",
+        "what am i seeing"
+    ]
+    if any (k in text_lower for k in screenshot_keywords):
+        return True
+
+    doc = nlp(text)
+    if any(tok.lemma_ in ("screenshot", "help with screen")for tok in doc):
+        return True
+    
+    return False

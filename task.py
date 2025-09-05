@@ -1,4 +1,5 @@
 import os 
+import re
 import mss, base64
 from pathlib import Path
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -28,8 +29,30 @@ def solve_from_screenshot():
     ]
     )
     response = llm.invoke([message])
-    return response
+    matches = re.findall(r"```(?:\w+)?\n(.*?)```", response , re.DOTALL)
 
-solution = solve_from_screenshot()
-print("Gemini Says\n", solution)
+    if matches:
+    # If multiple blocks, take the first (or join them all if needed)
+        code_to_type = "\n\n".join(m.strip() for m in matches)
+    else:
+    # fallback if no code block, take everything
+        code_to_type = response.strip()
+
+
+
+    return code_to_type
+
+
+# #Just testing the mechanism
+# raw_response = solve_from_screenshot().content
+
+# matches = re.findall(r"```(?:\w+)?\n(.*?)```", raw_response , re.DOTALL)
+
+# if matches:
+#     # If multiple blocks, take the first (or join them all if needed)
+#     code_to_type = "\n\n".join(m.strip() for m in matches)
+# else:
+#     # fallback if no code block, take everything
+#     code_to_type = raw_output.strip()
+
 

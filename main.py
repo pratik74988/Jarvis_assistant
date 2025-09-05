@@ -1,6 +1,12 @@
-
+# ========================================================================
+# Imports
+# ========================================================================
 import streamlit as st
 import time
+
+from listener import listen
+from speaker import speak, beep
+from brain import get_response, get_google_response
 from memory import (
     add_to_history,
     get_context,
@@ -8,11 +14,12 @@ from memory import (
     should_store,
     store_long_term_memory,
     recall_long_term_memory,
+    should_trigger_screen_mechanism,
 )
-# import your voice + brain modules
-from listener import listen
-from speaker import speak, beep
-from brain import get_response
+
+# ========================================================================
+# Streamlit Mode (GUI)
+# ========================================================================
 
 # --- Session State Initialization ---
 if "chat_history" not in st.session_state:
@@ -20,16 +27,27 @@ if "chat_history" not in st.session_state:
 if "live_mode" not in st.session_state:
     st.session_state.live_mode = False
 
-st.title("Jarvis V0.0 🎙️")
+st.title("Jarvis V0.0 🎙️ 📸")
 
 # --- Sidebar ---
 st.sidebar.header("wanna change me?")
 voice_mode = st.sidebar.checkbox("Enable voice mode", value=False)
+speaker_mode = st.toggle("Speaker mode")
 if st.sidebar.button("🔴 Toggle Live Mode"):
     st.session_state.live_mode = not st.session_state.live_mode
 
+
+# --- Screenshot Feature Info ---
+st.sidebar.markdown("### 📸 Screenshot Feature")
+st.sidebar.markdown("Try saying:")
+st.sidebar.markdown("- 'take a screenshot'")
+st.sidebar.markdown("- 'what do you see?'")
+st.sidebar.markdown("- 'analyze my screen'")
+st.sidebar.markdown("- 'capture screen'")
+
 # --- Input Area ---
 user_input = st.text_input("say something dont be shy:", "")
+
 
 # --- Main Interaction ---
 def process_input(user_input):
@@ -90,6 +108,7 @@ def process_input(user_input):
 
     speak(response)
 
+
 # --- Handle send button or live mode ---
 if st.button("send") or (voice_mode and st.button("🎤 Speak")):
     if voice_mode and not user_input:
@@ -117,46 +136,9 @@ for role, text in st.session_state.chat_history:
         st.markdown(f"🤖 **Jarvis:** {text}")
 
 
-
-
-
-
-
-
-
-
-
-# def main():
-#     speak("Jarvis Online, What can I do for you today? Or should I just take a nap?")
-#     while True:
-#         beep()  # Signal before listening
-#         command = listen()
-#         if not command:
-#             continue
-
-#         #exit Condition
-#         if "bye" in command or "goodbye" in command or "exit" in command:
-#             speak("Shutting down... but not because you told me to. Totally my own idea.")
-#             time.sleep(5)
-#             break
-#         #save important parts of what user said
-#         important_user_text = extract_important_parts(command)
-#         add_to_history("user", important_user_text)
-#         #Get jarvis reply with memory context
-#         response = get_response(command, get_context())
-#         # Save Jarvis's reply too (optional for callbacks/roasts)
-#         add_to_history("assistant", response)
-
-#         speak(response)  # Will finish speaking before listening again
-#         time.sleep(0.8)
-
-# if __name__ == "__main__":
-#     main()
-from listener import listen
-from speaker import speak, beep
-from brain import get_response
-from memory import add_to_history, get_context, extract_important_parts
-import time
+# ========================================================================
+# Console Mode (active)
+# ========================================================================
 
 def main():
     speak("Jarvis Online")
@@ -171,16 +153,54 @@ def main():
             speak("Shutting down... but not because you told me to. Totally my own idea.")
             time.sleep(5)
             break
+
         #save important parts of what user said
         important_user_text = extract_important_parts(command)
         add_to_history("user", important_user_text)
+        if (should_trigger_screen_mechanism == False):
         #Get jarvis reply with memory context
-        response = get_response(command, get_context())
+            response = get_response(command, get_context())
+        else:
+            get_google_response()
+
+
         # Save Jarvis's reply too (optional for callbacks/roasts)
         add_to_history("assistant", response)
-
-        speak(response)  # Will finish speaking before listening again
+        if speaker_mode:
+            speak(response)  # Will finish speaking before listening again
         time.sleep(0.8)
+
 
 if __name__ == "__main__":
     main()
+
+# ========================================================================
+# Legacy Console Mode (commented out)
+# ========================================================================
+
+# def main():
+#     speak("Jarvis Online, What can I do for you today? Or should I just take a nap?")
+#     while True:
+#         beep()  # Signal before listening
+#         command = listen()
+#         if not command:
+#             continue
+#
+#         #exit Condition
+#         if "bye" in command or "goodbye" in command or "exit" in command:
+#             speak("Shutting down... but not because you told me to. Totally my own idea.")
+#             time.sleep(5)
+#             break
+#         #save important parts of what user said
+#         important_user_text = extract_important_parts(command)
+#         add_to_history("user", important_user_text)
+#         #Get jarvis reply with memory context
+#         response = get_response(command, get_context())
+#         # Save Jarvis's reply too (optional for callbacks/roasts)
+#         add_to_history("assistant", response)
+#
+#         speak(response)  # Will finish speaking before listening again
+#         time.sleep(0.8)
+#
+# if __name__ == "__main__":
+#     main()
