@@ -29,17 +29,19 @@ def solve_from_screenshot():
     ]
     )
     response = llm.invoke([message])
-    matches = re.findall(r"```(?:\w+)?\n(.*?)```", response , re.DOTALL)
+    response_text = response.content if hasattr(response, "content") else str(response)
+    matches = re.findall(r"```(?:\w+)?\n(.*?)```", response_text , re.DOTALL)
+
+    matches = re.findall(r"```(?:\w+)?\n(.*?)```", response_text , re.DOTALL)
+
 
     if matches:
     # If multiple blocks, take the first (or join them all if needed)
         code_to_type = "\n\n".join(m.strip() for m in matches)
     else:
     # fallback if no code block, take everything
-        code_to_type = response.strip()
-
-
-
+        code_to_type = response_text.strip()
+    
     return code_to_type
 
 

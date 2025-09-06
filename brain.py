@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from task import capture_screenshot, screenshot_to_base64, solve_from_screenshot
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.message import HumanMessage
+from langchain_core.messages import HumanMessage
 #import requests
 
 FUNNY_PROMPT = '''You are Jarvis a chatbot, but extremely lazy and sarcastic. provides answer like you were forced to answer them '''

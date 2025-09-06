@@ -3,10 +3,14 @@
 # ========================================================================
 import streamlit as st
 import time
+import logging
+import threading
+import keyboard 
 
 from listener import listen
 from speaker import speak, beep
 from brain import get_response, get_google_response
+from task import solve_from_screenshot
 from memory import (
     add_to_history,
     get_context,
@@ -15,7 +19,38 @@ from memory import (
     store_long_term_memory,
     recall_long_term_memory,
     should_trigger_screen_mechanism,
+
 )
+
+
+# ========================================================================
+# Logging Setup
+# ========================================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S"
+)
+logger = logging.getLogger("Jarvis")
+
+# Store logs in Streamlit session
+if "logs" not in st.session_state:
+    st.session_state.logs = []
+
+
+def log_to_ui(message, level="INFO"):
+    """Send logs to both console + Streamlit session."""
+    if level == "INFO":
+        logger.info(message)
+    elif level == "WARNING":
+        logger.warning(message)
+    elif level == "ERROR":
+        logger.error(message)
+    else:
+        logger.debug(message)
+
+    st.session_state.logs.append(f"[{level}] {message}")
+
 
 # ========================================================================
 # Streamlit Mode (GUI)
@@ -36,7 +71,6 @@ speaker_mode = st.toggle("Speaker mode")
 if st.sidebar.button("🔴 Toggle Live Mode"):
     st.session_state.live_mode = not st.session_state.live_mode
 
-
 # --- Screenshot Feature Info ---
 st.sidebar.markdown("### 📸 Screenshot Feature")
 st.sidebar.markdown("Try saying:")
@@ -51,7 +85,7 @@ user_input = st.text_input("say something dont be shy:", "")
 
 # --- Main Interaction ---
 def process_input(user_input):
-    print(f"[LOG] Received input: {user_input}")
+    log_to_ui(f"Received input: {user_input}")
 
     # Exit condition
     if any(x in user_input.lower() for x in ["bye", "goodbye", "exit"]):
@@ -63,34 +97,39 @@ def process_input(user_input):
         st.stop()
 
     # --- Short-term memory ---
-    print(f"[LOG] Calling extract_important_parts")
+    log_to_ui("Calling extract_important_parts")
     important_user_text = extract_important_parts(user_input)
 
-    print(f"[LOG] Calling add_to_history for user")
+    log_to_ui("Adding to history (user)")
     add_to_history("user", important_user_text)
 
     # --- Long-term memory storage ---
-    print(f"[LOG] Checking if input should be stored")
+    log_to_ui("Checking if input should be stored")
     if should_store(user_input):
-        print(f"[LOG] Storing input in long-term memory")
+        log_to_ui("Storing input in long-term memory")
         store_long_term_memory(user_input, role="user")
 
     # --- Recall long-term memory ---
-    print(f"[LOG] Recalling long-term memory")
+    log_to_ui("Recalling long-term memory")
     past_memories = recall_long_term_memory(user_input, top_k=3)
     memory_context = "\n".join(past_memories[0]) if past_memories else ""
 
     # --- Full context for LLM ---
-    print(f"[LOG] Getting short-term context")
+    log_to_ui("Getting short-term context")
     full_context = get_context()
     if memory_context:
         full_context.append({"role": "memory", "content": memory_context})
-        print(f"[MEMORY USED] {memory_context}")
+        log_to_ui(f"[MEMORY USED] {memory_context}")
 
-    print(f"[LOG] Getting response from LLM")
-    response = get_response(user_input, full_context)
+    # --- Decide how to respond ---
+    if not should_trigger_screen_mechanism(user_input):
+        log_to_ui("Getting response from LLM")
+        response = get_response(user_input, full_context)
+    else:
+        log_to_ui("Triggering Google response")
+        response = get_google_response()
 
-    print(f"[LOG] Calling add_to_history for assistant")
+    log_to_ui("Adding to history (assistant)")
     add_to_history("assistant", response)
 
     # --- Save in session state ---
@@ -106,7 +145,8 @@ def process_input(user_input):
             placeholder.markdown(f"🤖 **Jarvis:** {typed_text}")
             time.sleep(0.02)
 
-    speak(response)
+    if speaker_mode:
+        speak(response)
 
 
 # --- Handle send button or live mode ---
@@ -135,11 +175,17 @@ for role, text in st.session_state.chat_history:
     else:
         st.markdown(f"🤖 **Jarvis:** {text}")
 
+# --- Display logs ---
+with st.expander("📜 Logs"):
+    for msg in st.session_state.logs[-30:]:  # last 30 logs
+        st.text(msg)
+
 
 # ========================================================================
-# Console Mode (active)
+# Console Mode (commented out, synced with GUI)
 # ========================================================================
 
+"""
 def main():
     speak("Jarvis Online")
     while True:
@@ -148,31 +194,33 @@ def main():
         if not command:
             continue
 
-        #exit Condition
+        # Exit Condition
         if "bye" in command or "goodbye" in command or "exit" in command:
             speak("Shutting down... but not because you told me to. Totally my own idea.")
             time.sleep(5)
             break
 
-        #save important parts of what user said
+        # Save important parts of what user said
         important_user_text = extract_important_parts(command)
         add_to_history("user", important_user_text)
-        if (should_trigger_screen_mechanism == False):
-        #Get jarvis reply with memory context
+
+        if not should_trigger_screen_mechanism(command):
             response = get_response(command, get_context())
         else:
-            get_google_response()
+            response = get_google_response(command)
 
-
-        # Save Jarvis's reply too (optional for callbacks/roasts)
         add_to_history("assistant", response)
+
         if speaker_mode:
             speak(response)  # Will finish speaking before listening again
+
         time.sleep(0.8)
 
 
 if __name__ == "__main__":
     main()
+"""
+
 
 # ========================================================================
 # Legacy Console Mode (commented out)
@@ -204,3 +252,13 @@ if __name__ == "__main__":
 #
 # if __name__ == "__main__":
 #     main()
+
+# import your existing function
+
+def hotkey_listener():
+    # Press Ctrl+Shift+S anywhere to trigger screenshot
+    keyboard.add_hotkey("ctrl+shift+s", solve_from_screenshot)
+    keyboard.wait()  # keep listener alive
+
+# Run in background (won’t block Streamlit or CLI loop)
+threading.Thread(target=hotkey_listener, daemon=True).start()
