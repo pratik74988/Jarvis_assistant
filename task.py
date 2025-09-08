@@ -1,6 +1,8 @@
 import os 
 import re
 import mss, base64
+import pyautogui 
+import time
 from pathlib import Path
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
@@ -44,7 +46,10 @@ def solve_from_screenshot():
     
     return code_to_type
 
-
+def type_solution ():
+    response  = solve_from_screenshot()
+    time.sleep(0.2)
+    pyautogui.write(response, interval=0.01)
 # #Just testing the mechanism
 # raw_response = solve_from_screenshot().content
 

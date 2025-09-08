@@ -10,7 +10,7 @@ import keyboard
 from listener import listen
 from speaker import speak, beep
 from brain import get_response, get_google_response
-from task import solve_from_screenshot
+from task import solve_from_screenshot, type_solution
 from memory import (
     add_to_history,
     get_context,
@@ -19,9 +19,7 @@ from memory import (
     store_long_term_memory,
     recall_long_term_memory,
     should_trigger_screen_mechanism,
-
 )
-
 
 # ========================================================================
 # Logging Setup
@@ -33,13 +31,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Jarvis")
 
-# Store logs in Streamlit session
 if "logs" not in st.session_state:
     st.session_state.logs = []
 
-
 def log_to_ui(message, level="INFO"):
-    """Send logs to both console + Streamlit session."""
     if level == "INFO":
         logger.info(message)
     elif level == "WARNING":
@@ -50,28 +45,29 @@ def log_to_ui(message, level="INFO"):
         logger.debug(message)
 
     st.session_state.logs.append(f"[{level}] {message}")
-
+    # Cap logs to avoid unbounded growth in the UI/session
+    if len(st.session_state.logs) > 1000:
+        st.session_state.logs = st.session_state.logs[-1000:]
 
 # ========================================================================
-# Streamlit Mode (GUI)
+# Session State Initialization
 # ========================================================================
-
-# --- Session State Initialization ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "live_mode" not in st.session_state:
     st.session_state.live_mode = False
+if "waiting" not in st.session_state:
+    st.session_state.waiting = False  # tracks if bot is replying
 
-st.title("Jarvis V0.0 🎙️ 📸")
-
-# --- Sidebar ---
-st.sidebar.header("wanna change me?")
-voice_mode = st.sidebar.checkbox("Enable voice mode", value=False)
-speaker_mode = st.toggle("Speaker mode")
+# ========================================================================
+# Sidebar
+# ========================================================================
+st.sidebar.header("⚙️ Settings")
+voice_mode = st.sidebar.checkbox("Enable Voice Mode", value=False)
+speaker_mode = st.sidebar.toggle("🔊 Speaker Mode")
 if st.sidebar.button("🔴 Toggle Live Mode"):
     st.session_state.live_mode = not st.session_state.live_mode
 
-# --- Screenshot Feature Info ---
 st.sidebar.markdown("### 📸 Screenshot Feature")
 st.sidebar.markdown("Try saying:")
 st.sidebar.markdown("- 'take a screenshot'")
@@ -79,13 +75,35 @@ st.sidebar.markdown("- 'what do you see?'")
 st.sidebar.markdown("- 'analyze my screen'")
 st.sidebar.markdown("- 'capture screen'")
 
-# --- Input Area ---
-user_input = st.text_input("say something dont be shy:", "")
+# ========================================================================
+# Layout
+# ========================================================================
+left, right = st.columns([3, 1])  # chat left, logs right
 
+with left:
+    st.title("Jarvis V0.0 🎙️ 📸")
 
-# --- Main Interaction ---
+    # --- Chat Display ---
+    chat_container = st.container()
+    with chat_container:
+        for role, text in st.session_state.chat_history:
+            with st.chat_message("user" if role == "user" else "assistant"):
+                st.markdown(text)
+
+    # --- Input Area pinned at bottom ---
+    user_input = st.chat_input("Type here...")
+
+with right:
+    st.subheader("📜 Logs")
+    log_text = "\n".join(st.session_state.logs[-200:])
+    st.text_area("Logs", log_text, height=300, disabled=True, label_visibility="collapsed")
+
+# ========================================================================
+# Processing
+# ========================================================================
 def process_input(user_input):
     log_to_ui(f"Received input: {user_input}")
+    st.session_state.waiting = True
 
     # Exit condition
     if any(x in user_input.lower() for x in ["bye", "goodbye", "exit"]):
@@ -93,71 +111,60 @@ def process_input(user_input):
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("assistant", response))
         speak(response)
-        st.write("#### Jarvis stopped")
+        st.session_state.waiting = False
         st.stop()
 
-    # --- Short-term memory ---
-    log_to_ui("Calling extract_important_parts")
+    # Short-term memory
+    log_to_ui("Extracting important parts")
     important_user_text = extract_important_parts(user_input)
-
-    log_to_ui("Adding to history (user)")
     add_to_history("user", important_user_text)
 
-    # --- Long-term memory storage ---
-    log_to_ui("Checking if input should be stored")
+    # Long-term memory
     if should_store(user_input):
         log_to_ui("Storing input in long-term memory")
         store_long_term_memory(user_input, role="user")
 
-    # --- Recall long-term memory ---
-    log_to_ui("Recalling long-term memory")
+    log_to_ui("Recalling memory")
     past_memories = recall_long_term_memory(user_input, top_k=3)
     memory_context = "\n".join(past_memories[0]) if past_memories else ""
 
-    # --- Full context for LLM ---
-    log_to_ui("Getting short-term context")
+    # Full context
     full_context = get_context()
     if memory_context:
         full_context.append({"role": "memory", "content": memory_context})
-        log_to_ui(f"[MEMORY USED] {memory_context}")
 
-    # --- Decide how to respond ---
+    # Response
     if not should_trigger_screen_mechanism(user_input):
-        log_to_ui("Getting response from LLM")
+        log_to_ui("LLM response")
         response = get_response(user_input, full_context)
     else:
-        log_to_ui("Triggering Google response")
+        log_to_ui("Google response")
         response = get_google_response()
 
-    log_to_ui("Adding to history (assistant)")
     add_to_history("assistant", response)
-
-    # --- Save in session state ---
     st.session_state.chat_history.append(("user", user_input))
-    st.session_state.chat_history.append(("assistant", response))
 
-    # --- Typing effect ---
+    # Typing effect
     with st.chat_message("assistant"):
         placeholder = st.empty()
         typed_text = ""
         for char in response:
             typed_text += char
-            placeholder.markdown(f"🤖 **Jarvis:** {typed_text}")
+            placeholder.markdown(typed_text)
             time.sleep(0.02)
+
+    st.session_state.chat_history.append(("assistant", response))
+    st.session_state.waiting = False
 
     if speaker_mode:
         speak(response)
 
+# ========================================================================
+# Handle Input
+# ========================================================================
+if user_input:
+    process_input(user_input)
 
-# --- Handle send button or live mode ---
-if st.button("send") or (voice_mode and st.button("🎤 Speak")):
-    if voice_mode and not user_input:
-        beep()
-        user_input = listen()
-    if user_input:
-        process_input(user_input)
-
-# --- Live mode loop ---
 if st.session_state.live_mode and voice_mode:
     st.info("🎧 Live mode ON... Listening...")
     beep()
@@ -167,18 +174,15 @@ if st.session_state.live_mode and voice_mode:
     time.sleep(0.5)
     st.experimental_rerun()
 
-# --- Display chat history ---
-st.write("### Chat History")
-for role, text in st.session_state.chat_history:
-    if role == "user":
-        st.markdown(f"👤 **You:** {text}")
-    else:
-        st.markdown(f"🤖 **Jarvis:** {text}")
+# ========================================================================
+# Hotkey Listener
+# ========================================================================
+def hotkey_listener():
+    keyboard.add_hotkey("ctrl+shift+s", type_solution)
+    keyboard.wait()
 
-# --- Display logs ---
-with st.expander("📜 Logs"):
-    for msg in st.session_state.logs[-30:]:  # last 30 logs
-        st.text(msg)
+threading.Thread(target=hotkey_listener, daemon=True).start()
+
 
 
 # ========================================================================
@@ -254,11 +258,3 @@ if __name__ == "__main__":
 #     main()
 
 # import your existing function
-
-def hotkey_listener():
-    # Press Ctrl+Shift+S anywhere to trigger screenshot
-    keyboard.add_hotkey("ctrl+shift+s", solve_from_screenshot)
-    keyboard.wait()  # keep listener alive
-
-# Run in background (won’t block Streamlit or CLI loop)
-threading.Thread(target=hotkey_listener, daemon=True).start()
