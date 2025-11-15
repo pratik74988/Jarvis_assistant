@@ -38,6 +38,7 @@ def get_response(user_input , history):
 
 
 #LLAMA 3
+#just wondering what to add next in project 
 # def get_response (user_input, history):
 #     context_str ="\n".join([f"{h['role']}: {h['content']}" for h in history])
     
